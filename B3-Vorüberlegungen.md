@@ -6,23 +6,30 @@ Schwerpunkt: LiDAR, Zustandsautomat
 
 # Aufgabe
 
-Weiße Linie in /image_raw finden
-Horizontale Position publizieren
+Hindernis vor dem Roboter erkennen (LiDAR)
 
-/line_position
-/line_angle (optional)
+/scan auswerten
+Hindernisstatus publizieren
+
+/obstacle_detected
 
 # Ablauf
 
-1. Bild zu OpenCV-Format konvertieren (cv_bridge)
-2. Nur unteren Bildbereich betrachten (Region of Interest)
-3. In Graustufen konvertieren
-4. Schwellwert anwenden (weiß = Linie)
-5. Schwerpunkt der weißen Pixel berechnen
-6. Position normalisieren: -1.0 (links) bis +1.0 (rechts)
+1. LiDAR-Daten von /scan empfangen (sensor_msgs/LaserScan)
+2. Relevanten Winkelbereich filtern (Fahrtrichtung)
+3. Ungültige Messwerte entfernen (0.0, inf)
+4. Minimale Distanz im Prüfbereich bestimmen
+5. Mit Schwellwert vergleichen (z. B. 0.35 m)
+6. Hindernisstatus als Bool publizieren (True / False)
 
 # Zu implementierende Funktionen
 
-7. `image_callback()`: Bild verarbeiten und Linienposition berechnen
-8. `normalize_position()`: Pixelposition zu -1.0...+1.0 konvertieren
-9. Debugging: Optional das verarbeitete Bild publizieren
+1. `scan_callback()`: LiDAR-Daten empfangen und verarbeiten
+
+2. `check_obstacle()`: Prüfen, ob ein Hindernis im Fahrbereich ist
+
+3. Parameter:
+
+        Prüfbereich (Winkel, z. B. −30° bis +30°)
+
+        Stopp-Distanz (z. B. 0.35 m)
