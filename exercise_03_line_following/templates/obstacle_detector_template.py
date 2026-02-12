@@ -166,8 +166,9 @@ class ObstacleDetectorNode(Node):
                 continue
 
             # TODO: Prüfen ob Distanz < Stopp-Distanz
-            # if distance < self.stop_distance:
-            #     return True
+            if distance < self.stop_distance:
+                return True
+            
             pass  # TODO: Ersetzen
 
         return False

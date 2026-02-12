@@ -7,10 +7,9 @@ Schwerpunkt: LiDAR, Zustandsautomat
 # Aufgabe
 
 Hindernis vor dem Roboter erkennen (LiDAR)
-
 /scan auswerten
-Hindernisstatus publizieren
 
+Hindernisstatus publizieren
 /obstacle_detected
 
 # Ablauf
