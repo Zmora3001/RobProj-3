@@ -9,8 +9,8 @@ Schwerpunkt: OpenCV, Bildverarbeitung
 Weiße Linie in /image_raw finden
 Horizontale Position publizieren
 
-/line_position
-/line_angle (optional)
+/line_position float32
+/line_angle (optional) float32
 
 # Ablauf
 
@@ -18,7 +18,7 @@ Horizontale Position publizieren
 2. Nur unteren Bildbereich betrachten (Region of Interest)
 3. In Graustufen konvertieren
 4. Schwellwert anwenden (weiß = Linie)
-5. Schwerpunkt der weißen Pixel berechnen
+5. Schwerpunkt der weißen Pixel berechnen (Optional nur Cluster betrachten)
 6. Position normalisieren: -1.0 (links) bis +1.0 (rechts)
 
 # Zu implementierende Funktionen
