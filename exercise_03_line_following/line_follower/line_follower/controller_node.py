@@ -8,26 +8,227 @@ und vervollständigen Sie die TODOs.
 Aufgabe B.2
 """
 
-# TODO: Kopieren Sie das Template und implementieren Sie den PID-Regler
-
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Float32, Bool
+from geometry_msgs.msg import Twist
+import time
+
+
+class PIDController:
+    """
+    Einfache PID-Regler Implementierung.
+
+    TODO 1: Vervollständigen Sie die update()-Methode
+    """
+
+    def __init__(self, kp: float, ki: float, kd: float, dt: float = 0.1):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.dt = dt
+
+        # Interne Zustände
+        self.integral = 0.0
+        self.prev_error = 0.0
+        self.last_time = None
+
+    def update(self, error: float) -> float:
+        """
+        Berechnet die Stellgröße basierend auf dem aktuellen Fehler.
+
+        Args:
+            error: Regeldifferenz (Sollwert - Istwert)
+
+        Returns:
+            float: Stellgröße u
+        """
+        # Zeitschritt berechnen
+        current_time = time.time()
+        if self.last_time is not None:
+            self.dt = current_time - self.last_time
+        self.last_time = current_time
+
+        # Schutz vor Division durch Null
+        if self.dt <= 0:
+            self.dt = 0.1
+
+        # P-Anteil: proportional zum aktuellen Fehler
+        p_term = self.kp * error
+
+        # I-Anteil: Integral des Fehlers über die Zeit
+        self.integral += error * self.dt
+        i_term = self.integral * self.ki
+
+        # D-Anteil: Ableitung des Fehlers
+        d_term = self.kd * (error - self.prev_error) / self.dt
+
+        # Fehler für nächste Iteration speichern
+        self.prev_error = error
+
+        # Stellgröße berechnen
+        output = p_term + i_term + d_term
+
+        return output
+
+    def reset(self):
+        """Setzt den internen Zustand zurück."""
+        self.integral = 0.0
+        self.prev_error = 0.0
+        self.last_time = None
 
 
 class ControllerNode(Node):
     def __init__(self):
         super().__init__('controller_node')
-        self.get_logger().error('NICHT IMPLEMENTIERT!')
-        self.get_logger().error('Kopieren Sie das Template aus templates/pid_controller_template.py')
+
+        # Parameter deklarieren
+        
+        self.declare_parameter('kp', 0.5)
+        self.declare_parameter('ki', 0.0)
+        self.declare_parameter('kd', 0.1)
+        self.declare_parameter('linear_velocity', 0.1)  # Vorwärtsgeschwindigkeit [m/s]
+        self.declare_parameter('max_angular_velocity', 1.0)  # Max. Drehrate [rad/s]
+        
+        # Parameter laden
+        kp = self.get_parameter('kp').value
+        ki = self.get_parameter('ki').value
+        kd = self.get_parameter('kd').value
+        self.linear_vel = self.get_parameter('linear_velocity').value
+        self.max_angular_vel = self.get_parameter('max_angular_velocity').value
+
+        # PID-Regler initialisieren
+        self.pid = PIDController(kp, ki, kd)
+
+        # Zustand
+        self.line_position = None
+        self.obstacle_detected = False
+        self.last_line_time = None
+
+        # Subscriber
+        self.line_sub = self.create_subscription(
+            Float32,
+            '/line_position',
+            self.line_position_callback,
+            10 #WAS MACHT DAS HIER???
+        )
+
+        self.obstacle_sub = self.create_subscription(
+            Bool,
+            '/obstacle_detected',
+            self.obstacle_callback,
+            10
+        )
+
+        # Publisher
+        self.cmd_vel_pub = self.create_publisher(
+            Twist,
+            '/cmd_vel',
+            10
+        )
+
+        # Timer für regelmäßige Regelung (10 Hz)
+        self.control_timer = self.create_timer(0.1, self.control_loop)
+
+        self.get_logger().info('Controller Node gestartet')
+        self.get_logger().info(f'  PID: Kp={kp}, Ki={ki}, Kd={kd}')
+        self.get_logger().info(f'  Linear velocity: {self.linear_vel} m/s')
+
+    def line_position_callback(self, msg: Float32):
+        """
+        Empfängt die Linienposition vom line_detector_node.
+
+        TODO 2: Speichern Sie die Position und den Zeitstempel
+        """
+        self.line_position = msg.data
+        self.last_line_time = self.get_clock().now()
+
+        self.pid.update(self.line_position)
+
+    def obstacle_callback(self, msg: Bool):
+        """Empfängt den Hindernis-Status."""
+        self.obstacle_detected = msg.data
+
+    def control_loop(self):
+        """
+        Haupt-Regelschleife, wird periodisch aufgerufen.
+
+        TODO 3: Implementieren Sie die Regellogik
+
+        Ablauf:
+        1. Prüfen ob Hindernis → Stopp
+        2. Prüfen ob Linie vorhanden → sonst Stopp
+        3. Fehler berechnen (Sollwert = 0, Istwert = line_position)
+        4. PID-Regler aufrufen
+        5. Geschwindigkeitsbefehle publizieren
+        """
+        twist = Twist()
+
+        # ===== Zustandsprüfungen =====
+
+        # 1. Hindernis erkannt → Stopp
+        if self.obstacle_detected:
+            self.get_logger().info('Hindernis erkannt - STOPP', throttle_duration_sec=1.0)
+            self.publish_stop()
+            self.pid.reset()  # PID zurücksetzen während Stopp
+            return
+
+        # 2. Keine Liniendaten vorhanden
+        if self.line_position is None:
+            self.get_logger().warn('Keine Linienposition empfangen', throttle_duration_sec=2.0)
+            self.publish_stop()
+            return
+
+        # 3. Liniendaten zu alt? (Timeout nach 0.5 Sekunden)
+        if self.last_line_time is not None:
+            age = (self.get_clock().now() - self.last_line_time).nanoseconds / 1e9
+            if age > 0.5:
+                self.get_logger().warn('Liniendaten veraltet - STOPP')
+                self.publish_stop()
+                return
+
+        # ===== PID-Regelung =====
+
+        # Fehler berechnen
+        error = 0.0 - self.line_position
+
+        # PID-Regler aufrufen
+        angular_velocity = self.pid.update(error)
+
+        # Begrenzung der Winkelgeschwindigkeit
+        angular_velocity = max(-self.max_angular_vel,
+                              min(self.max_angular_vel, angular_velocity))
+
+        # ===== Geschwindigkeit publizieren =====
+
+        twist.linear.x = self.linear_vel
+        twist.angular.z = angular_velocity
+
+        self.cmd_vel_pub.publish(twist)
+
+        # Debug-Ausgabe
+        self.get_logger().debug(
+            f'Line: {self.line_position:.2f}, Error: {error:.2f}, '
+            f'Angular: {angular_velocity:.2f}'
+        )
+
+    def publish_stop(self):
+        """Sendet Stopp-Befehl (alle Geschwindigkeiten = 0)."""
+        twist = Twist()
+        twist.linear.x = 0.0
+        twist.angular.z = 0.0
+        self.cmd_vel_pub.publish(twist)
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = ControllerNode()
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        # Sicherer Stopp bei Ctrl+C
+        node.publish_stop()
     finally:
         node.destroy_node()
         rclpy.shutdown()

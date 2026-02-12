@@ -3,3 +3,4 @@ build/
 install/
 rosbags/*
 !rosbags/*.sha256
+.venv/
