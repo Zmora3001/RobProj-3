@@ -1,7 +1,10 @@
 log/
 build/
 install/
-rosbags/*
+rosbags/*/*/
+rosbags/**/*.zip
+rosbags/*.tar.gz
 !rosbags/*.sha256
 .venv/
 Rosbag/
+

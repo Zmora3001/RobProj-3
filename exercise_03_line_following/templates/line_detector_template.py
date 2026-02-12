@@ -19,47 +19,42 @@ import numpy as np
 
 class LineDetectorNode(Node):
     def __init__(self):
-        super().__init__('line_detector_node')
+        super().__init__("line_detector_node")
 
         # Parameter deklarieren
-        self.declare_parameter('threshold', 200)  # Schwellwert für Weiß-Erkennung
-        self.declare_parameter('roi_top_ratio', 0.6)  # Oberer Rand der ROI (60% = untere 40%)
-        self.declare_parameter('debug_image', True)  # Debug-Bild publizieren?
+        self.declare_parameter("threshold", 200)  # Schwellwert für Weiß-Erkennung
+        self.declare_parameter(
+            "roi_top_ratio", 0.6
+        )  # Oberer Rand der ROI (60% = untere 40%)
+        self.declare_parameter("debug_image", True)  # Debug-Bild publizieren?
 
         # Parameter laden
-        self.threshold = self.get_parameter('threshold').value
-        self.roi_top_ratio = self.get_parameter('roi_top_ratio').value
-        self.debug_enabled = self.get_parameter('debug_image').value
+        self.threshold = self.get_parameter("threshold").value
+        self.roi_top_ratio = self.get_parameter("roi_top_ratio").value
+        self.debug_enabled = self.get_parameter("debug_image").value
 
         # CV Bridge für ROS ↔ OpenCV Konvertierung
         self.bridge = CvBridge()
 
         # Subscriber für Kamerabild
         self.image_sub = self.create_subscription(
-            Image,
-            '/camera/image_raw',
-            self.image_callback,
-            10
+            Image, "/image_raw", self.image_callback, 10
         )
 
         # Publisher für Linienposition (-1.0 bis +1.0)
-        self.position_pub = self.create_publisher(
-            Float32,
-            '/line_position',
-            10
-        )
+        self.position_pub = self.create_publisher(Float32, "/line_position", 10)
 
         # Optional: Debug-Bild publizieren
         if self.debug_enabled:
             self.debug_pub = self.create_publisher(
-                Image,
-                '/line_detector/debug_image',
-                10
+                Image, "/line_detector/debug_image", 10
             )
 
-        self.get_logger().info('Line Detector Node gestartet')
-        self.get_logger().info(f'  Schwellwert: {self.threshold}')
-        self.get_logger().info(f'  ROI: untere {int((1-self.roi_top_ratio)*100)}% des Bildes')
+        self.get_logger().info("Line Detector Node gestartet")
+        self.get_logger().info(f"  Schwellwert: {self.threshold}")
+        self.get_logger().info(
+            f"  ROI: untere {int((1-self.roi_top_ratio)*100)}% des Bildes"
+        )
 
     def image_callback(self, msg: Image):
         """
@@ -78,7 +73,7 @@ class LineDetectorNode(Node):
         try:
             # Schritt 1: ROS-Image zu OpenCV konvertieren
             # Hinweis: self.bridge.imgmsg_to_cv2(msg, 'bgr8')
-            cv_image = None  # TODO: Konvertieren
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
 
             if cv_image is None:
                 return
@@ -109,10 +104,12 @@ class LineDetectorNode(Node):
 
             # Optional: Debug-Bild erstellen und publizieren
             if self.debug_enabled and binary is not None:
-                self.publish_debug_image(cv_image, roi_top, binary, line_position, width)
+                self.publish_debug_image(
+                    cv_image, roi_top, binary, line_position, width
+                )
 
         except Exception as e:
-            self.get_logger().error(f'Fehler in image_callback: {e}')
+            self.get_logger().error(f"Fehler in image_callback: {e}")
 
     def find_line_center(self, binary_image, image_width):
         """
@@ -139,8 +136,8 @@ class LineDetectorNode(Node):
         # moments['m10'] = Summe der x-Koordinaten
         # cx = m10 / m00 = x-Koordinate des Schwerpunkts
 
-        if moments is not None and moments['m00'] > 100:  # Mindestfläche
-            cx = moments['m10'] / moments['m00']
+        if moments is not None and moments["m00"] > 100:  # Mindestfläche
+            cx = moments["m10"] / moments["m00"]
 
             # Normalisieren: 0 = linker Rand, width = rechter Rand
             # → -1.0 = ganz links, 0.0 = Mitte, +1.0 = ganz rechts
@@ -166,20 +163,46 @@ class LineDetectorNode(Node):
         if line_pos is not None:
             # Rückrechnung: normalisiert → Pixel
             cx_pixel = int((line_pos + 1) / 2 * width)
-            cv2.line(debug_image, (cx_pixel, roi_top), (cx_pixel, original.shape[0]), (0, 0, 255), 3)
+            cv2.line(
+                debug_image,
+                (cx_pixel, roi_top),
+                (cx_pixel, original.shape[0]),
+                (0, 0, 255),
+                3,
+            )
 
             # Bildmitte als Referenz
-            cv2.line(debug_image, (width // 2, roi_top), (width // 2, original.shape[0]), (255, 0, 0), 1)
+            cv2.line(
+                debug_image,
+                (width // 2, roi_top),
+                (width // 2, original.shape[0]),
+                (255, 0, 0),
+                1,
+            )
 
             # Position als Text
-            cv2.putText(debug_image, f'Pos: {line_pos:.2f}', (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(
+                debug_image,
+                f"Pos: {line_pos:.2f}",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 255, 0),
+                2,
+            )
         else:
-            cv2.putText(debug_image, 'Keine Linie!', (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(
+                debug_image,
+                "Keine Linie!",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 0, 255),
+                2,
+            )
 
         # Publizieren
-        debug_msg = self.bridge.cv2_to_imgmsg(debug_image, 'bgr8')
+        debug_msg = self.bridge.cv2_to_imgmsg(debug_image, "bgr8")
         self.debug_pub.publish(debug_msg)
 
 
@@ -196,5 +219,5 @@ def main(args=None):
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
